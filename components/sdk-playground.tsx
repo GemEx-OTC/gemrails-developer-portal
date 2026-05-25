@@ -1,9 +1,10 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Check, Copy, Loader2, Play, Terminal } from "lucide-react"
 import { CodeBlock } from "@/components/code-block"
+import { SDK_TAB_EVENT, SDK_TAB_STORAGE_KEY } from "@/components/sdk-dropdown"
 import {
   MOCK_API_RESPONSE,
   SDK_CODE_SAMPLES,
@@ -11,6 +12,12 @@ import {
   type SdkLanguage,
 } from "@/lib/sdk-playground-samples"
 import { cn } from "@/lib/utils"
+
+const VALID_LANGS = new Set<SdkLanguage>(["nodejs", "python", "curl", "go"])
+
+function isSdkLanguage(value: string | null | undefined): value is SdkLanguage {
+  return !!value && VALID_LANGS.has(value as SdkLanguage)
+}
 
 const TERMINAL_LINES = [
   { text: "$ gemrails simulate --env sandbox", delay: 0 },
@@ -26,7 +33,48 @@ export function SdkPlayground() {
   const [simulating, setSimulating] = useState(false)
   const [visibleLines, setVisibleLines] = useState(0)
   const [showJson, setShowJson] = useState(false)
+  const [pulseKey, setPulseKey] = useState(0)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  const applyLanguage = useCallback((lang: SdkLanguage) => {
+    setActiveTab(lang)
+    setPulseKey((k) => k + 1)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const params = new URLSearchParams(window.location.search)
+    const fromUrl = params.get("lang")
+    let stored: string | null = null
+    try {
+      stored = sessionStorage.getItem(SDK_TAB_STORAGE_KEY)
+    } catch {
+      stored = null
+    }
+
+    const initial = isSdkLanguage(fromUrl)
+      ? fromUrl
+      : isSdkLanguage(stored)
+        ? stored
+        : null
+
+    if (initial) {
+      applyLanguage(initial)
+      try {
+        sessionStorage.removeItem(SDK_TAB_STORAGE_KEY)
+      } catch {
+        // ignore
+      }
+    }
+
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<SdkLanguage>).detail
+      if (isSdkLanguage(detail)) applyLanguage(detail)
+    }
+    window.addEventListener(SDK_TAB_EVENT, handler)
+    return () => window.removeEventListener(SDK_TAB_EVENT, handler)
+  }, [applyLanguage])
 
   const code = SDK_CODE_SAMPLES[activeTab]
 
@@ -82,28 +130,39 @@ export function SdkPlayground() {
           <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border bg-muted/40 px-2 pt-2">
               <div className="relative flex gap-1 overflow-x-auto">
-                {SDK_TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      "relative z-10 shrink-0 px-4 py-2.5 text-sm font-medium transition-colors",
-                      activeTab === tab.id
-                        ? "text-emerald-400"
-                        : "text-gray-500 hover:text-gray-300"
-                    )}
-                  >
-                    {tab.label}
-                    {activeTab === tab.id && (
-                      <motion.div
-                        layoutId="sdkPlaygroundTab"
-                        className="absolute inset-x-0 bottom-0 h-0.5 bg-emerald-500"
-                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      />
-                    )}
-                  </button>
-                ))}
+                {SDK_TABS.map((tab) => {
+                  const isActive = activeTab === tab.id
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveTab(tab.id)}
+                      className={cn(
+                        "relative z-10 shrink-0 px-4 py-2.5 text-sm font-medium transition-colors",
+                        isActive ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
+                      )}
+                    >
+                      {tab.label}
+                      {isActive && (
+                        <motion.div
+                          layoutId="sdkPlaygroundTab"
+                          className="absolute inset-x-0 bottom-0 h-0.5 bg-emerald-500"
+                          transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                        />
+                      )}
+                      {isActive && (
+                        <motion.span
+                          key={pulseKey}
+                          initial={{ opacity: 0.6, scale: 0.85 }}
+                          animate={{ opacity: 0, scale: 1.15 }}
+                          transition={{ duration: 0.9, ease: "easeOut" }}
+                          aria-hidden
+                          className="pointer-events-none absolute inset-1 rounded-md bg-emerald-500/30"
+                        />
+                      )}
+                    </button>
+                  )
+                })}
               </div>
               <button
                 type="button"

@@ -4,20 +4,38 @@ import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { ChevronDown, Terminal } from "lucide-react"
+import type { SdkLanguage } from "@/lib/sdk-playground-samples"
 import { cn } from "@/lib/utils"
 
-export const SDK_LANGUAGES = [
-  { label: "Node.js", href: "#sdk", description: "npm / TypeScript" },
-  { label: "Python", href: "#sdk", description: "pip package" },
-  { label: "Go", href: "#sdk", description: "go get module" },
-  { label: "cURL", href: "#sdk", description: "REST examples" },
-] as const
+export const SDK_TAB_STORAGE_KEY = "gemrails:sdkTab"
+export const SDK_TAB_EVENT = "gemrails:sdkTab"
+
+export const SDK_LANGUAGES: {
+  id: SdkLanguage
+  label: string
+  description: string
+}[] = [
+  { id: "nodejs", label: "Node.js", description: "npm / TypeScript" },
+  { id: "python", label: "Python", description: "pip package" },
+  { id: "go", label: "Go", description: "go get module" },
+  { id: "curl", label: "cURL", description: "REST examples" },
+]
 
 export const DOC_LINKS = [
   { label: "API Reference", href: "#docs" },
   { label: "Quickstart", href: "#quickstart" },
   { label: "Webhooks", href: "#webhooks" },
 ] as const
+
+function selectSdkTab(id: SdkLanguage) {
+  if (typeof window === "undefined") return
+  try {
+    sessionStorage.setItem(SDK_TAB_STORAGE_KEY, id)
+  } catch {
+    // ignore storage failures (private mode, etc.)
+  }
+  window.dispatchEvent(new CustomEvent<SdkLanguage>(SDK_TAB_EVENT, { detail: id }))
+}
 
 interface SdkDropdownProps {
   variant?: "desktop" | "mobile"
@@ -43,9 +61,12 @@ export function SdkDropdown({ variant = "desktop", onNavigate }: SdkDropdownProp
         <p className="px-1 text-xs font-semibold uppercase tracking-wider text-gray-500">SDK</p>
         {SDK_LANGUAGES.map((item) => (
           <Link
-            key={item.label}
-            href={item.href}
-            onClick={onNavigate}
+            key={item.id}
+            href={`/?lang=${item.id}#sdk`}
+            onClick={() => {
+              selectSdkTab(item.id)
+              onNavigate?.()
+            }}
             className="flex flex-col rounded-lg px-3 py-2 text-muted-foreground hover:bg-gray-800/50 hover:text-emerald-400"
           >
             <span className="text-sm font-medium text-foreground">{item.label}</span>
@@ -89,9 +110,10 @@ export function SdkDropdown({ variant = "desktop", onNavigate }: SdkDropdownProp
             </div>
             {SDK_LANGUAGES.map((item) => (
               <Link
-                key={item.label}
-                href={item.href}
+                key={item.id}
+                href={`/?lang=${item.id}#sdk`}
                 onClick={() => {
+                  selectSdkTab(item.id)
                   setOpen(false)
                   onNavigate?.()
                 }}
